@@ -2,6 +2,7 @@ use axum::{
     routing::{get, post}, Extension, Json, Router,
     response::Json as JsonResponse,
 };
+use core::time;
 use std::net::SocketAddr;
 use tokio;
 use serde::Deserialize;
@@ -11,6 +12,11 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use std::env;
 use dotenv::dotenv;
+use rand::{distributions::Alphanumeric, Rng};
+use chrono::{Utc, Duration};
+
+pub mod dashboard;
+
 
 // handler function for the root path
 async fn root() -> &'static str {
@@ -34,6 +40,7 @@ async  fn login(Json(payload): Json<LoginCredentials>, Extension(db_pool) : Exte
     .unwrap();
 
     if result.is_some() {
+        create_and_update_registration_token(&*db_pool, &payload.phone_number).await;
         "Login successful!"
     } else {
         "Invalid credentials!"
@@ -45,16 +52,87 @@ struct RegisterResponse {
     message: String
 }
 
-async fn register(Json(payload): Json<LoginCredentials>, Extension(db_pool) : Extension<Arc<PgPool>>) -> JsonResponse<RegisterResponse>{
+async fn create_and_update_registration_token(db: &PgPool, phone_number: &String) {
     let result = sqlx::query!(
+        "SELECT phone_number FROM users WHERE phone_number = $1",
+        phone_number
+    )
+    .fetch_optional(&*db)
+    .await;
+
+    let registration_token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(30)
+        .map(char::from)
+        .collect();
+
+    let created_at = Utc::now().naive_utc();
+
+    match result {
+        Ok(Some(_)) => {
+            // Update the token
+            sqlx::query!(
+                "UPDATE users SET registration_token = $1, created_at = $2 WHERE phone_number = $3",
+                registration_token,
+                created_at,
+                phone_number,
+                
+            )
+            .execute(&*db)
+            .await
+            .unwrap();
+        }
+        Ok(None) => {
+            // Create a new token
+            sqlx::query!(
+                "INSERT INTO users (phone_number, registration_token, created_at) VALUES ($1, $2, $3)",
+                phone_number,
+                registration_token,
+                created_at
+            )
+            .execute(&*db)
+            .await
+            .unwrap();
+        }
+        Err(e) => {
+            eprintln!("Failed to create or update registration token: {:?}", e);
+        }
+    }
+}
+
+
+
+async fn register(Json(payload): Json<LoginCredentials>, Extension(db_pool) : Extension<Arc<PgPool>>) -> JsonResponse<RegisterResponse>{
+
+    match sqlx::query!(
+        "SELECT phone_number FROM users WHERE phone_number = $1",
+        payload.phone_number
+    )
+    .fetch_optional(&*db_pool)
+    .await{
+        Ok(Some(_)) => {
+            return JsonResponse(RegisterResponse {
+                message: "User already Exists!".to_string(),
+            })
+        }
+        Ok(None) => {
+            // Continue
+        }
+        Err(e) => {
+            eprintln!("Failed to register user: {:?}", e);
+            return JsonResponse(RegisterResponse {
+                message: "Failed to register user.".to_string(),
+            })
+        }
+    }
+
+    match sqlx::query!(
         "INSERT INTO users (phone_number, password) VALUES ($1, $2)",
         payload.phone_number,
         payload.password
     )
     .execute(&*db_pool)
-    .await;
-
-    match result {
+    .await {
         Ok(_) => {
             // Registration successful
             JsonResponse(RegisterResponse {
@@ -90,6 +168,8 @@ async fn main() {
         .route("/", get(root))
         .route("/register", post(register))
         .route("/login", post(login))
+        .route("/dashboard/celebrity/add", post(dashboard::celebrity::add_celebrity))
+        .route("/dashboard/admin/login", post(dashboard::admin::login_admin))
         .layer(Extension(shared_pool));
 
     // specify the address and port for the server to listen on
