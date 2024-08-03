@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{Extension, Json,  response::Json as JsonResponse,  extract::TypedHeader,
   headers::{HeaderMapExt, Authorization, authorization::Bearer},
   http::StatusCode,};
-use sqlx::PgPool; 
+use sqlx::{PgPool, Pool, Postgres}; 
 
 
 
@@ -19,6 +19,12 @@ pub struct AddCelebrityResponse {
 }
 
 pub async fn add_celebrity(TypedHeader(Authorization(token)): TypedHeader<Authorization<Bearer>>,Json(payload): Json<AddCelebrity>, Extension(db_pool): Extension<Arc<PgPool>>) -> JsonResponse<AddCelebrityResponse> {
+    let user_id = validate_admin_token(token.token(), &db_pool).await.map_err(|_| StatusCode::UNAUTHORIZED);
+    if user_id.is_err() {
+        return JsonResponse(AddCelebrityResponse {
+            message: "Unauthorized".to_string(),
+        });
+    }
 
     let result = sqlx::query!(
         "INSERT INTO celebrity (name) VALUES ($1)",
@@ -41,3 +47,21 @@ pub async fn add_celebrity(TypedHeader(Authorization(token)): TypedHeader<Author
         }
     }
   }
+
+
+  async fn validate_admin_token(token: &str, pool: &Pool<Postgres>) -> Result<i32, sqlx::Error> {
+    print!("token: {}", token);
+    
+    let result = sqlx::query!(
+        "SELECT id FROM admins WHERE registration_token = $1",
+        token
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(record) = result {
+        Ok(record.id)
+    } else {
+        Err(sqlx::Error::RowNotFound)
+    }
+}

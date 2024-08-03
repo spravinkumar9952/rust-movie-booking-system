@@ -1,6 +1,5 @@
 use axum::{
-    routing::{get, post}, Extension, Json, Router,
-    response::Json as JsonResponse,
+    http::StatusCode, response::{IntoResponse, Json as JsonResponse, Response}, routing::{get, post}, Extension, Json, Router
 };
 use core::time;
 use std::net::SocketAddr;
@@ -14,8 +13,12 @@ use std::env;
 use dotenv::dotenv;
 use rand::{distributions::Alphanumeric, Rng};
 use chrono::{Utc, Duration};
+use tower::{ServiceBuilder, layer::layer_fn};
 
 pub mod dashboard;
+pub mod utils;
+pub mod common;
+
 
 
 // handler function for the root path
@@ -29,7 +32,19 @@ struct LoginCredentials {
     password: String
 }
 
-async  fn login(Json(payload): Json<LoginCredentials>, Extension(db_pool) : Extension<Arc<PgPool>>) -> &'static str{
+#[derive(Serialize)]
+struct LoginResponse {
+    registration_token: String
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    message: String,
+    error_code: i32,
+    description: String 
+}
+
+async  fn login(Json(payload): Json<LoginCredentials>, Extension(db_pool) : Extension<Arc<PgPool>>) -> Result<Json<LoginResponse>, Response>{
     let result = sqlx::query!(
         "SELECT phone_number FROM users WHERE phone_number = $1 AND password = $2",
         payload.phone_number,
@@ -40,10 +55,18 @@ async  fn login(Json(payload): Json<LoginCredentials>, Extension(db_pool) : Exte
     .unwrap();
 
     if result.is_some() {
-        create_and_update_registration_token(&*db_pool, &payload.phone_number).await;
-        "Login successful!"
+        let registration_token: String = utils::generate_random_string();
+
+        create_and_update_registration_token(&*db_pool, &payload.phone_number, &registration_token).await;
+        Ok(Json(LoginResponse{
+            registration_token : registration_token
+        }))
     } else {
-        "Invalid credentials!"
+        Err((StatusCode::UNAUTHORIZED, Json(ErrorResponse{
+            message: "Invalid credentials!".to_string(),
+            error_code: 401,
+            description: "Invalid credentials".to_string()
+        })).into_response())
     }
 }
 
@@ -52,7 +75,7 @@ struct RegisterResponse {
     message: String
 }
 
-async fn create_and_update_registration_token(db: &PgPool, phone_number: &String) {
+async fn create_and_update_registration_token(db: &PgPool, phone_number: &String, registration_token: &String) {
     let result = sqlx::query!(
         "SELECT phone_number FROM users WHERE phone_number = $1",
         phone_number
@@ -60,11 +83,6 @@ async fn create_and_update_registration_token(db: &PgPool, phone_number: &String
     .fetch_optional(&*db)
     .await;
 
-    let registration_token: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(30)
-        .map(char::from)
-        .collect();
 
     let created_at = Utc::now().naive_utc();
 
@@ -164,12 +182,25 @@ async fn main() {
     let shared_pool = Arc::new(db_pool);
 
     // build our application with a single route
-    let app = Router::new()
+    let ui_api = Router::new()
         .route("/", get(root))
         .route("/register", post(register))
-        .route("/login", post(login))
-        .route("/dashboard/celebrity/add", post(dashboard::celebrity::add_celebrity))
-        .route("/dashboard/admin/login", post(dashboard::admin::login_admin))
+        .route("/login", post(login));
+        // .layer(
+        //     ServiceBuilder::new()
+        //         .layer(Extension(shared_pool.clone()))
+        //         .layer(layer_fn(|inner: ServiceBuilder<Extension<Arc<PgPool>>>| {
+        //             tower::service_fn(move |req| common::middleware::verify_normal_token(req, inner.clone()))
+        //         }))
+        // )
+    
+    let dashboard_api = Router::new()
+        .route("/celebrity/add", post(dashboard::celebrity::add_celebrity))
+        .route("/admin/login", post(dashboard::admin::login_admin));
+
+    let app = Router::new()
+        .nest("/", ui_api)
+        .nest("/dashboard", dashboard_api)
         .layer(Extension(shared_pool));
 
     // specify the address and port for the server to listen on
