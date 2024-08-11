@@ -1,19 +1,17 @@
 use axum::{
-    http::StatusCode, middleware, response::{IntoResponse, Json as JsonResponse, Response}, routing::{get, post}, Extension, Json, Router
+    middleware, 
+    routing::{get, post}, 
+    Extension, 
+    Router
 };
-use core::time;
+
 use std::net::SocketAddr;
 use tokio;
-use serde::Deserialize;
-use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
 use std::sync::Arc;
 use std::env;
 use dotenv::dotenv;
-use rand::{distributions::Alphanumeric, Rng};
-use chrono::{Utc, Duration};
-use tower::{ServiceBuilder, layer::layer_fn};
+use tower::ServiceBuilder;
 
 pub mod dashboard;
 pub mod utils;
@@ -38,20 +36,25 @@ async fn main() {
 
     let shared_pool = Arc::new(db_pool);
 
-    let ui_api = Router::new()
+    let ui_api: Router = Router::new()
         .route("/", get(root))
         .route("/register", post(ui::user::register))
         .route("/login", post(ui::user::login))
         .layer(
             ServiceBuilder::new()
-                .layer(Extension(shared_pool.clone()))
-                .layer(middleware::from_fn(common::middleware::token_validator))
+                .layer(Extension(shared_pool.clone()))     
+                .layer(middleware::from_fn(ui::middleware::token_validator)) 
         );
     
     let dashboard_api = Router::new()
         .route("/celebrity/add", post(dashboard::celebrity::add_celebrity))
-        .route("/admin/login", post(dashboard::admin::login_admin))
-        .route("/movies/add", post(dashboard::movies::add_movie));
+        .route("/movie/add", post(dashboard::movies::add_movie))
+        .layer(
+            ServiceBuilder::new()
+                .layer(Extension(shared_pool.clone()))
+                .layer(middleware::from_fn(dashboard::middleware::token_validator))
+        )
+        .route("/admin/login", post(dashboard::admin::login_admin));
 
     let app = Router::new()
         .nest("/", ui_api)

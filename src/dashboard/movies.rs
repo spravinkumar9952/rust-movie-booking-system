@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use axum::{Extension, Json};
-use chrono::Utc;
+use axum::{response::{IntoResponse, Response}, Extension, Json};
 use sqlx::PgPool;
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
+
+use crate::common::types::ErrorResponse;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum MovieGenre {
@@ -27,12 +28,21 @@ pub struct AddMovieResponse {
     message: String,
 }
 
+impl IntoResponse for AddMovieResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct AddMovieRequest {
     title: String,
 }
 
-pub async fn add_movie(Json(payload): Json<AddMovieRequest>, Extension(db_pool): Extension<Arc<PgPool>>) -> Json<AddMovieResponse> {
+pub async fn add_movie(
+    Json(payload): Json<AddMovieRequest>, 
+    Extension(db_pool): Extension<Arc<PgPool>>
+) -> Result<AddMovieResponse, ErrorResponse> {
     let movie_id = Uuid::new_v4();
     
     match sqlx::query!(
@@ -45,13 +55,16 @@ pub async fn add_movie(Json(payload): Json<AddMovieRequest>, Extension(db_pool):
     )
     .execute(&*db_pool)
     .await {
-        Ok(_) => Json(AddMovieResponse {
-            message: "Movie added successfully.".to_string(),
-        }),
+        Ok(_) => {
+            Ok(AddMovieResponse {
+                message: "Movie added successfully!".to_string(),
+            })
+        }
         Err(e) => {
-            eprintln!("Failed to add movie: {:?}", e);
-            Json(AddMovieResponse {
+            Err(ErrorResponse {
                 message: "Failed to add movie.".to_string(),
+                error_code: 500,
+                description: e.to_string(),
             })
         }
     }

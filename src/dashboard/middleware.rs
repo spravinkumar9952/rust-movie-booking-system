@@ -21,7 +21,7 @@ where
   // Check for the token in the headers
   if let Some(token) = req.headers().get("token") {
       if let Ok(token_str) = token.to_str() {
-         let query = sqlx::query!("SELECT * FROM users WHERE registration_token = $1", token_str);
+         let query = sqlx::query!("SELECT * FROM admins WHERE registration_token = $1", token_str);
           let result = query.fetch_one(&**db_pool).await;
           if result.is_ok() {
               authorized = true;

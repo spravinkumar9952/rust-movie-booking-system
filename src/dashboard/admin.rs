@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use axum::{Extension, Json,  response::Json as JsonResponse};
+use axum::{response::{IntoResponse, Response}, Extension, Json};
 use sqlx::PgPool; 
-use rand::{distributions::Alphanumeric, Rng};
-use chrono::{Utc, Duration};
+use chrono::Utc;
+
+use crate::{common, utils};
 
 #[derive(serde::Deserialize)]
 pub struct AdminLoginCredentials {
@@ -13,10 +14,20 @@ pub struct AdminLoginCredentials {
 
 #[derive(serde::Serialize)]
 pub struct AdminLoginResponse {
-    message: String
+    message: String,
+    registration_token: String
 }
 
-pub async fn login_admin(Json(payload): Json<AdminLoginCredentials>, Extension(db_pool) : Extension<Arc<PgPool>>) -> JsonResponse<AdminLoginResponse>{
+impl IntoResponse for AdminLoginResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
+}
+
+pub async fn login_admin(
+    Json(payload): Json<AdminLoginCredentials>, 
+    Extension(db_pool) : Extension<Arc<PgPool>>
+) -> Result<AdminLoginResponse, common::types::ErrorResponse>{
     let result = sqlx::query!(
         "SELECT phone_number FROM admins WHERE phone_number = $1 AND password = $2",
         payload.phone_number,
@@ -27,31 +38,58 @@ pub async fn login_admin(Json(payload): Json<AdminLoginCredentials>, Extension(d
     .unwrap();
 
     if result.is_some() {
-        create_and_update_registration_token(&*db_pool, &payload.phone_number).await;
-        JsonResponse(AdminLoginResponse {
-            message: "Login successful!".to_string()
+        let registration_token: String = utils::generate_random_string();
+        create_and_update_registration_token(&*db_pool, &payload.phone_number, &registration_token).await;
+        Ok(AdminLoginResponse {
+            message: "Login successful!".to_string(),
+            registration_token
         })
     } else {
-        JsonResponse(AdminLoginResponse {
-            message: "Invalid credentials!".to_string()
+        Err(common::types::ErrorResponse {
+            message: "Invalid credentials!".to_string(),
+            error_code: 401,
+            description: "Invalid credentials".to_string()
         })
     }
 }
 
-async fn create_and_update_registration_token(db: &PgPool, phone_number: &String) {
-    let registration_token: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(30)
-        .map(char::from)
-        .collect();
-    let created_at = Utc::now().naive_utc();
-    sqlx::query!(
-        "UPDATE admins SET registration_token = $1, created_at = $2 WHERE phone_number = $3",
-        registration_token,
-        created_at,
+
+pub async fn create_and_update_registration_token(db: &PgPool, phone_number: &String, registration_token: &String) {
+    let result = sqlx::query!(
+        "SELECT phone_number FROM users WHERE phone_number = $1",
         phone_number
     )
-    .execute(&*db)
-    .await
-    .unwrap();
-}
+    .fetch_optional(&*db)
+    .await;
+  
+  
+    let created_at = Utc::now().naive_utc();
+  
+    match result {
+        Ok(Some(_)) => {
+            sqlx::query!(
+                "UPDATE admins SET registration_token = $1, created_at = $2 WHERE phone_number = $3",
+                registration_token,
+                created_at,
+                phone_number,
+            )
+            .execute(&*db)
+            .await
+            .unwrap();
+        }
+        Ok(None) => {
+            sqlx::query!(
+                "INSERT INTO admins (phone_number, registration_token, created_at) VALUES ($1, $2, $3)",
+                phone_number,
+                registration_token,
+                created_at
+            )
+            .execute(&*db)
+            .await
+            .unwrap();
+        }
+        Err(e) => {
+            eprintln!("Failed to create or update registration token: {:?}", e);
+        }
+    }
+  }

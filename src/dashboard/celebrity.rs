@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json,  response::Json as JsonResponse,  extract::TypedHeader,
-  headers::{HeaderMapExt, Authorization, authorization::Bearer},
+  headers::{Authorization, authorization::Bearer},
   http::StatusCode,};
 use sqlx::{PgPool, Pool, Postgres}; 
 
