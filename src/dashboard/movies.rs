@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use axum::{response::{IntoResponse, Response}, Extension, Json};
-use sqlx::PgPool;
+use axum::{body::Body, http::StatusCode, response::{IntoResponse, Response}, Extension, Json};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
@@ -8,7 +8,7 @@ use crate::common::types::ErrorResponse;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum MovieGenre {
-    Action, Comedy, Drama, Horror, Romance
+    Action, Comedy, Drama, Horror, Romance, SciFi
 }
 
 impl ToString for MovieGenre {
@@ -19,6 +19,7 @@ impl ToString for MovieGenre {
             MovieGenre::Drama => "Drama".to_string(),
             MovieGenre::Horror => "Horror".to_string(),
             MovieGenre::Romance => "Romance".to_string(),
+            MovieGenre::SciFi => "SciFi".to_string(),
         }
     }
 }
@@ -30,13 +31,15 @@ pub struct AddMovieResponse {
 
 impl IntoResponse for AddMovieResponse {
     fn into_response(self) -> Response {
-        Json(self).into_response()
+        (StatusCode::OK, Json(self)).into_response()
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AddMovieRequest {
     title: String,
+    genre: String,
+    actors_id: Vec<String>
 }
 
 pub async fn add_movie(
@@ -44,28 +47,85 @@ pub async fn add_movie(
     Extension(db_pool): Extension<Arc<PgPool>>
 ) -> Result<AddMovieResponse, ErrorResponse> {
     let movie_id = Uuid::new_v4();
+
+    let mut transaction: Transaction<Postgres> = match db_pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            return Err(ErrorResponse {
+                message: "Failed to start transaction.".to_string(),
+                error_code: 500,
+                description: e.to_string(),
+            });
+        }
+    };
     
     match sqlx::query!(
       "INSERT INTO movie (
         id, 
-        title
-        ) VALUES ($1, $2)",
-      movie_id,
-      payload.title
+        title,
+        genre
+        ) VALUES ($1, $2, $3)",
+      movie_id.to_string(),
+      payload.title,
+      payload.genre
     )
-    .execute(&*db_pool)
+    .execute(&mut transaction)
     .await {
         Ok(_) => {
+            for actor_id in &payload.actors_id {
+                let res = sqlx::query!(
+                    "INSERT INTO movie_celebrities (
+                        movie_id, 
+                        celebrity_id
+                        ) VALUES ($1, $2)",
+                    movie_id.to_string(),
+                    actor_id
+                )
+                .execute(&mut transaction)
+                .await;
+                
+                if res.is_err() {
+                    transaction.rollback().await.unwrap_or_default();
+                    return  Err(ErrorResponse {
+                        message: "Failed to add movie.".to_string(),
+                        error_code: 500,
+                        description: res.unwrap_err().to_string(),
+                    });
+                }
+            };
+
+            if let Err(e) = transaction.commit().await {
+                return Err(ErrorResponse {
+                    message: "Failed to commit transaction.".to_string(),
+                    error_code: 500,
+                    description: e.to_string(),
+                });
+            }
+            
             Ok(AddMovieResponse {
                 message: "Movie added successfully!".to_string(),
             })
         }
         Err(e) => {
-            Err(ErrorResponse {
+            transaction.rollback().await.unwrap_or_default();
+
+            // Response::builder()
+            // .status(StatusCode::INTERNAL_SERVER_ERROR)
+            // .body(Body::from( ErrorResponse { 
+            //     message: "Failed to add movie.".to_string(),
+            //     error_code: 500,
+            //     description: e.to_string()
+            //     }))
+            // .unwrap()
+            // .into_response()
+                
+            Err(
+                ErrorResponse {
                 message: "Failed to add movie.".to_string(),
                 error_code: 500,
                 description: e.to_string(),
-            })
+                }
+            )
         }
     }
 }

@@ -1,12 +1,11 @@
 use std::sync::Arc;
-
-use axum::{Extension, Json,  response::Json as JsonResponse,  extract::TypedHeader,
-  headers::{Authorization, authorization::Bearer},
-  http::StatusCode,};
-use sqlx::{PgPool, Pool, Postgres}; 
-
-
-
+use axum::{
+    response::IntoResponse, 
+    Extension, 
+    Json
+};
+use sqlx::PgPool;
+use crate::common;
 
 #[derive(serde::Deserialize)]
 pub struct AddCelebrity {
@@ -15,53 +14,41 @@ pub struct AddCelebrity {
 
 #[derive(serde::Serialize)]
 pub struct AddCelebrityResponse {
-    message: String
+    celeb_id: String
 }
 
-pub async fn add_celebrity(TypedHeader(Authorization(token)): TypedHeader<Authorization<Bearer>>,Json(payload): Json<AddCelebrity>, Extension(db_pool): Extension<Arc<PgPool>>) -> JsonResponse<AddCelebrityResponse> {
-    let user_id = validate_admin_token(token.token(), &db_pool).await.map_err(|_| StatusCode::UNAUTHORIZED);
-    if user_id.is_err() {
-        return JsonResponse(AddCelebrityResponse {
-            message: "Unauthorized".to_string(),
-        });
+impl IntoResponse for AddCelebrityResponse {    
+    fn into_response(self) -> axum::response::Response {
+        Json(self).into_response()
     }
+}
 
+pub async fn add_celebrity(
+    Json(payload): Json<AddCelebrity>,
+    Extension(db_pool): Extension<Arc<PgPool>>
+) -> Result<AddCelebrityResponse, common::types::ErrorResponse> {
+    
+    let celeb_id: String = uuid::Uuid::new_v4().to_string();
     let result = sqlx::query!(
-        "INSERT INTO celebrity (name) VALUES ($1)",
-        payload.name
+        "INSERT INTO celebrity (name, id) VALUES ($1, $2)",
+        payload.name,
+        celeb_id
     )
     .execute(&*db_pool)
     .await;
 
     match result {
         Ok(_) => {
-          JsonResponse(AddCelebrityResponse {
-                message: "Celebrity added successfully!".to_string(),
+          Ok(AddCelebrityResponse {
+                celeb_id
             })
         }
         Err(e) => {
-            eprintln!("Failed to add celebrity: {:?}", e);
-            JsonResponse(AddCelebrityResponse {
+            Err(common::types::ErrorResponse { 
                 message: "Failed to add celebrity.".to_string(),
+                error_code: 500,
+                description: e.to_string(),
             })
         }
     }
   }
-
-
-  async fn validate_admin_token(token: &str, pool: &Pool<Postgres>) -> Result<i32, sqlx::Error> {
-    print!("token: {}", token);
-    
-    let result = sqlx::query!(
-        "SELECT id FROM admins WHERE registration_token = $1",
-        token
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    if let Some(record) = result {
-        Ok(record.id)
-    } else {
-        Err(sqlx::Error::RowNotFound)
-    }
-}

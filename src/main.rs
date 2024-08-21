@@ -38,20 +38,19 @@ async fn main() {
 
     let ui_api: Router = Router::new()
         .route("/", get(root))
-        .route("/register", post(ui::user::register))
-        .route("/login", post(ui::user::login))
         .layer(
             ServiceBuilder::new()
-                .layer(Extension(shared_pool.clone()))     
                 .layer(middleware::from_fn(ui::middleware::token_validator)) 
-        );
+        )
+        .route("/register", post(ui::user::register))
+        .route("/login", post(ui::user::login))
+        .route("/movies", get(ui::movie::get_movies));
     
     let dashboard_api = Router::new()
         .route("/celebrity/add", post(dashboard::celebrity::add_celebrity))
         .route("/movie/add", post(dashboard::movies::add_movie))
         .layer(
             ServiceBuilder::new()
-                .layer(Extension(shared_pool.clone()))
                 .layer(middleware::from_fn(dashboard::middleware::token_validator))
         )
         .route("/admin/login", post(dashboard::admin::login_admin));

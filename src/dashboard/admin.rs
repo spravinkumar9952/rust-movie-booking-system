@@ -61,8 +61,7 @@ pub async fn create_and_update_registration_token(db: &PgPool, phone_number: &St
     )
     .fetch_optional(&*db)
     .await;
-  
-  
+
     let created_at = Utc::now().naive_utc();
   
     match result {
