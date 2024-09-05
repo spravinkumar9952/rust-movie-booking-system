@@ -49,6 +49,7 @@ async fn main() {
     let dashboard_api = Router::new()
         .route("/celebrity/add", post(dashboard::celebrity::add_celebrity))
         .route("/movie/add", post(dashboard::movies::add_movie))
+        .route("/theatre/add", post(dashboard::theatre::add_theatre))
         .layer(
             ServiceBuilder::new()
                 .layer(middleware::from_fn(dashboard::middleware::token_validator))

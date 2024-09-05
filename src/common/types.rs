@@ -1,4 +1,4 @@
-use axum::{http::{status, StatusCode}, response::{IntoResponse, Response}, Json};
+use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
 use serde::Serialize;
 
 #[derive(Serialize)]

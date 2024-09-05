@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::common;
+use crate::common::{self, error::throw500};
 
 #[derive(Serialize, Deserialize)]
 struct Celebrity {
@@ -41,12 +41,9 @@ pub async fn get_movies(
     match movies {
         Ok(movies) => {
             for movie in movies {
-                let actors_ids = sqlx::query!(
-                    "SELECT * FROM movie_celebrities WHERE movie_id = $1",
-                    movie.id
-                )
-                .fetch_all(&*db_pool)
-                .await;
+                let actors_ids = sqlx::query!("SELECT * FROM movie_celebrities WHERE movie_id = $1",movie.id)
+                    .fetch_all(&*db_pool)
+                    .await;
 
                 match actors_ids {
                     Ok(actors) => {
@@ -68,23 +65,11 @@ pub async fn get_movies(
                             actors: celebs,
                         });
                     }
-                    Err(e) => {
-                        return Err(common::types::ErrorResponse {
-                            message: "Failed to fetch actors.".to_string(),
-                            error_code: 500,
-                            description: e.to_string(),
-                        });
-                    }
+                    Err(e) => return throw500("Failed to fetch actors", e.to_string().as_str())
                 }
             }
             Ok(axum::Json(resp))
         }
-        Err(e) => {
-            return Err(common::types::ErrorResponse {
-                message: "Failed to fetch movies.".to_string(),
-                error_code: 500,
-                description: e.to_string(),
-            });
-        }
+        Err(e) => throw500("Failed to fetch movies", e.to_string().as_str())
     }
 }

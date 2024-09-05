@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use axum::{body::Body, http::StatusCode, response::{IntoResponse, Response}, Extension, Json};
+use axum::{http::StatusCode, response::{IntoResponse, Response}, Extension, Json};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
-use crate::common::types::ErrorResponse;
+use crate::common::{error::throw500, types::ErrorResponse};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum MovieGenre {
@@ -108,24 +108,7 @@ pub async fn add_movie(
         }
         Err(e) => {
             transaction.rollback().await.unwrap_or_default();
-
-            // Response::builder()
-            // .status(StatusCode::INTERNAL_SERVER_ERROR)
-            // .body(Body::from( ErrorResponse { 
-            //     message: "Failed to add movie.".to_string(),
-            //     error_code: 500,
-            //     description: e.to_string()
-            //     }))
-            // .unwrap()
-            // .into_response()
-                
-            Err(
-                ErrorResponse {
-                message: "Failed to add movie.".to_string(),
-                error_code: 500,
-                description: e.to_string(),
-                }
-            )
+            throw500("Failed to add movie", e.to_string().as_str())
         }
     }
 }
