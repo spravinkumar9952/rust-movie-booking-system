@@ -21,3 +21,4 @@ uuid = {version = "1.10.0", features = [
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]}
 axum-macros = "0.4.1"
+redis = "0.27.2"

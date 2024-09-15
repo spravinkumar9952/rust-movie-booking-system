@@ -33,18 +33,20 @@ async fn main() {
         .connect(&database_url)
         .await
         .expect("Failed to create pool.");
-
     let shared_pool = Arc::new(db_pool);
+
+    let redis_client =Arc::new(redis::Client::open("redis://127.0.0.1/").expect("Failed to create redis client."));
 
     let ui_api: Router = Router::new()
         .route("/", get(root))
+        .route("/movies", get(ui::movie::get_movies))
+        .route("/theatre/list", get(ui::theatre::get_theatres))
         .layer(
             ServiceBuilder::new()
                 .layer(middleware::from_fn(ui::middleware::token_validator)) 
         )
         .route("/register", post(ui::user::register))
-        .route("/login", post(ui::user::login))
-        .route("/movies", get(ui::movie::get_movies));
+        .route("/login", post(ui::user::login));
     
     let dashboard_api = Router::new()
         .route("/celebrity/add", post(dashboard::celebrity::add_celebrity))
@@ -59,7 +61,8 @@ async fn main() {
     let app = Router::new()
         .nest("/", ui_api)
         .nest("/dashboard", dashboard_api)
-        .layer(Extension(shared_pool));
+        .layer(Extension(shared_pool))
+        .layer(Extension(redis_client));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("Listening on http://{}", addr);
