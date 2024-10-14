@@ -4,14 +4,18 @@ import { getMovies, Movie, MoviesResp } from "../API/Movies";
 import { color } from "../Helpers/Colors";
 
 
-type HomeProps = { }
+type MoviesProps = {
 
-export const Home: React.FC<HomeProps> = () => {
+}
+
+export const Movies: React.FC = () => {
+  console.log("Screen: Movies")
   const [movies, setMovies] = useState<MoviesResp>([]);
 
   useEffect(() => {
     const fetchMovies = async () => {
       const movies = await getMovies({});
+      console.log(movies);
       setMovies((old) => movies);
     }
     fetchMovies();
@@ -23,15 +27,15 @@ export const Home: React.FC<HomeProps> = () => {
   }, [])
 
   return (
-    <SafeAreaView style={homeStyleSheet.container}>
+    <SafeAreaView style={moviesStyleSheet.container}>
         {
-          movies.map((movie: Movie) => <MoviesCardView movie={movie} />)
+          movies.map((movie: Movie) => <MoviesCardView movie={movie} key={movie.id} />)
         }
     </SafeAreaView>
   );
 }
 
-const homeStyleSheet = StyleSheet.create({
+const moviesStyleSheet = StyleSheet.create({
   container: {
     backgroundColor: color.primaryBackground,
     flex: 1,
@@ -47,9 +51,9 @@ type MoviesCardViewProps = {
 
 const MoviesCardView : React.FC<MoviesCardViewProps>= ( {movie}) => {
   return (
-    <View style={moviesCardViewStyleSheet.container}>
+    <View style={moviesCardViewStyleSheet.container} key = {movie.id}>
       {
-          <View key={movie.id}>
+          <View>
             <Text style={moviesCardViewStyleSheet.title}>{movie.title}</Text>
           </View>
       }

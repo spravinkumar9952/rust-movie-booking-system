@@ -65,4 +65,6 @@ const Register : React.FC<RegisterProps>= ({navigation}) => {
   );
 }
 
+
+
 export default Register;

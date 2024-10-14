@@ -35,6 +35,7 @@ export const getMovies = async (req : MoviesReq): Promise<MoviesResp> => {
         "token": token
       }
     });
+    console.log(response);
     
     if(response.status !== 200){
       let errorResponse: ErrorResponse = await response.json();

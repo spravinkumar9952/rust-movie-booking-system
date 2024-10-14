@@ -35,7 +35,7 @@ const Login : React.FC<LoginProps>= ({navigation}) => {
       storeKeyVal("registration_token", resp.registration_token);
       navigation.reset({
         index: 0,
-        routes: [{ name: "Home" }],
+        routes: [{ name: "HomeNavigation" }],
       });
     }catch(e){
       console.log(e);

@@ -3,19 +3,16 @@
 
 
 import * as React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import Register from '../Screens/Register';
 import Login from '../Screens/Login';
-import { Home } from '../Screens/Home';
+import { Movies } from '../Screens/Movies';
+import { HomeNavigation } from './HomeNavigation';
 
-const Stack = createStackNavigator({
-  initialRouteName: "Login"
-});
+const Stack = createStackNavigator();
 
 const OnboardingFlow = () => {
   return (
-    <NavigationContainer>
       <Stack.Navigator>
         <Stack.Screen
           name="Login"
@@ -28,12 +25,11 @@ const OnboardingFlow = () => {
           options={{ headerShown : false }}
         />
         <Stack.Screen
-          name="Home"
-          component={Home}
+          name="HomeNavigation"
+          component={HomeNavigation}
           options={{ headerShown : false }}
         />
       </Stack.Navigator>
-    </NavigationContainer>
   );
 };
 
