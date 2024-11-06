@@ -11,7 +11,10 @@ export const Profile : FC<ProfileProps>= ({navigation}) => {
   const handleLogoutPress = () => {
     console.log("Logout Pressed");
     removeKey("registration_token");
-    navigation.navigate("Login");
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'OnboardingFlow' }],
+    });
   }
 
   return (

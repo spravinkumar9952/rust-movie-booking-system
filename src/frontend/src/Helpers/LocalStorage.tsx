@@ -14,8 +14,8 @@ export const getVal = async (key: string): Promise<string | null>=> {
     return await AsyncStorage.getItem(key);
   }catch(e){
     console.log(e);
+    return null
   }
-  return null
 }
 
 export const removeKey = async (key: string) => {

@@ -12,6 +12,8 @@ import { HomeNavigation } from './Navigators/HomeNavigation';
 import { Movies } from './Screens/Movies';
 import { Theatres } from './Screens/Theatres';
 import {NavigationContainer} from '@react-navigation/native';
+import { AuthProvider } from './Context/AuthContext';
+import { RootNavigation } from './Navigators/RootNavigation';
 
 const  App: React.FC = () => {
   const [registration_token, setRegistrationToken] = React.useState<string | null>(null);
@@ -26,11 +28,10 @@ const  App: React.FC = () => {
   }, []);
 
   return (
-  <NavigationContainer>
-    {registration_token === null ? <OnboardingFlow /> : <HomeNavigation />}
-  </NavigationContainer>
+    <AuthProvider>
+      <RootNavigation />
+    </AuthProvider>
   )
-    
 }
 
 export default App;

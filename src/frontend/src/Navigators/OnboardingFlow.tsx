@@ -11,7 +11,7 @@ import { HomeNavigation } from './HomeNavigation';
 
 const Stack = createStackNavigator();
 
-const OnboardingFlow = () => {
+export const OnboardingFlow = () => {
   return (
       <Stack.Navigator>
         <Stack.Screen
