@@ -12,7 +12,17 @@ const Tab = createBottomTabNavigator();
 export const HomeNavigation = () => {
   return (
     <SafeAreaProvider>
-        <Tab.Navigator>
+        <Tab.Navigator
+          screenOptions={
+            ({route}) => ({
+              // tabBarIcon: ({ focused, color, size }) => {
+
+              // },
+              tabBarActiveTintColor: 'tomato',
+              tabBarInactiveTintColor: 'gray',
+            })
+          }
+        >
           <Tab.Screen 
             name="Movies" 
             component={Movies} 
